@@ -135,7 +135,7 @@ const PollutantDetailsDrawer = ({ isOpen, onClose, pollutant, value }: Pollutant
                     </div>
                     <div className="grid grid-cols-2 text-sm">
                       <span className="text-muted-foreground">Very Poor:</span>
-                      <span>>{info.thresholds.poor} {info.unit}</span>
+                      <span>{{'>'}{info.thresholds.poor}} {info.unit}</span>
                     </div>
                   </div>
                 </div>
