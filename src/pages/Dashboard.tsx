@@ -13,6 +13,7 @@ import HistoricalDataChart from "@/components/HistoricalDataChart";
 import CoordinateInput from "@/components/CoordinateInput";
 import AqiLegend from "@/components/AqiLegend";
 import PollutantDetailsDrawer from "@/components/PollutantDetailsDrawer";
+import ImageAnalysis from "@/components/ImageAnalysis";
 
 const Dashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -134,10 +135,11 @@ const Dashboard = () => {
               </div>
               
               <Tabs defaultValue="forecast">
-                <TabsList>
+                <TabsList className="grid grid-cols-4">
                   <TabsTrigger value="forecast">Forecast</TabsTrigger>
                   <TabsTrigger value="historical">Historical</TabsTrigger>
                   <TabsTrigger value="pollutants">Pollutant Details</TabsTrigger>
+                  <TabsTrigger value="image-analysis">Image Analysis</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="forecast" className="mt-4">
@@ -196,6 +198,10 @@ const Dashboard = () => {
                       <p>Click on any pollutant to see detailed information about sources, health effects, and thresholds.</p>
                     </div>
                   </div>
+                </TabsContent>
+
+                <TabsContent value="image-analysis" className="mt-4">
+                  <ImageAnalysis />
                 </TabsContent>
               </Tabs>
             </div>

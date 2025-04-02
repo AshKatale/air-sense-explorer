@@ -1,265 +1,267 @@
 
-import { AirPollutionResponse, PollutantInfo, TimeRange } from '@/types/airQuality';
-import { toast } from "sonner";
+import { Coordinates, AirQualityData, AirPollutionResponse } from "@/types/airQuality";
 
-// We'll use a temporary API key for development
-// In production, this should be handled securely
-let API_KEY = '';
-
-export const setApiKey = (key: string) => {
-  API_KEY = key;
-  localStorage.setItem('openweather_api_key', key);
-  return isValidApiKey();
-};
-
-export const getApiKey = (): string => {
-  if (API_KEY) return API_KEY;
-  const savedKey = localStorage.getItem('openweather_api_key');
-  if (savedKey) API_KEY = savedKey;
-  return API_KEY;
-};
-
-export const isValidApiKey = async (): Promise<boolean> => {
-  const key = getApiKey();
-  if (!key) return false;
-  
-  try {
-    // Test the API key with a simple request
-    const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/air_pollution?lat=51.5074&lon=-0.1278&appid=${key}`
-    );
-    
-    if (!response.ok) {
-      if (response.status === 401) {
-        toast.error("Invalid API key. Please check your API key and try again.");
-        return false;
-      }
-      throw new Error(`Error validating API key: ${response.statusText}`);
-    }
-    
-    return true;
-  } catch (error) {
-    console.error("Error validating API key:", error);
-    return false;
-  }
-};
-
-export const fetchAirQualityData = async (
-  lat: number, 
-  lon: number, 
-  timeRange: TimeRange = 'current',
-  startTime?: number, 
-  endTime?: number
-): Promise<AirPollutionResponse | null> => {
-  const key = getApiKey();
-  if (!key) {
-    toast.error("API key not set. Please set your OpenWeather API key.");
-    return null;
-  }
-  
-  let url = '';
-  switch (timeRange) {
-    case 'current':
-      url = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${key}`;
-      break;
-    case 'forecast':
-      url = `https://api.openweathermap.org/data/2.5/air_pollution/forecast?lat=${lat}&lon=${lon}&appid=${key}`;
-      break;
-    case 'historical':
-      if (!startTime || !endTime) {
-        toast.error("Start and end times are required for historical data");
-        return null;
-      }
-      url = `https://api.openweathermap.org/data/2.5/air_pollution/history?lat=${lat}&lon=${lon}&start=${startTime}&end=${endTime}&appid=${key}`;
-      break;
-  }
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Error fetching ${timeRange} data: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error(`Error fetching ${timeRange} air quality data:`, error);
-    toast.error(`Failed to fetch ${timeRange} air quality data. Please try again.`);
-    return null;
-  }
-};
-
-// Pollutant information database with thresholds
-export const pollutantInfo: Record<string, PollutantInfo> = {
-  co: {
-    name: 'CO',
-    fullName: 'Carbon Monoxide',
-    unit: 'μg/m³',
-    thresholds: { good: 4400, fair: 9400, moderate: 12400, poor: 15400 },
-    description: 'Colorless, odorless gas produced by burning carbon-based fuels',
-    sources: ['Vehicle exhaust', 'Industrial processes', 'Combustion of fossil fuels'],
-    healthEffects: 'Reduces oxygen delivery to body organs, can cause headache, dizziness, and at high levels, death.'
-  },
-  no: {
-    name: 'NO',
-    fullName: 'Nitrogen Monoxide',
-    unit: 'μg/m³',
-    thresholds: { good: 40, fair: 70, moderate: 150, poor: 200 },
-    description: 'Reactive gas formed during combustion',
-    sources: ['Vehicle emissions', 'Power plants', 'Industrial processes'],
-    healthEffects: 'Contributes to respiratory problems, can form particulate matter and ozone.'
-  },
-  no2: {
-    name: 'NO₂',
-    fullName: 'Nitrogen Dioxide',
-    unit: 'μg/m³',
-    thresholds: { good: 40, fair: 70, moderate: 150, poor: 200 },
-    description: 'Reddish-brown gas with a sharp, harsh odor',
-    sources: ['Vehicles', 'Power plants', 'Industrial emissions'],
-    healthEffects: 'Causes inflammation of airways, reduced lung function, increased asthma attacks.'
-  },
-  o3: {
-    name: 'O₃',
-    fullName: 'Ozone',
-    unit: 'μg/m³',
-    thresholds: { good: 60, fair: 100, moderate: 140, poor: 180 },
-    description: 'Pale blue gas with a distinctive smell',
-    sources: ['Formed from NOx and VOCs in sunlight', 'Vehicle emissions', 'Industrial emissions'],
-    healthEffects: 'Irritates airways, reduces lung function, worsens asthma and chronic bronchitis.'
-  },
-  so2: {
-    name: 'SO₂',
-    fullName: 'Sulfur Dioxide',
-    unit: 'μg/m³',
-    thresholds: { good: 20, fair: 80, moderate: 250, poor: 350 },
-    description: 'Colorless gas with a pungent odor',
-    sources: ['Coal and oil burning', 'Industrial processes', 'Volcanoes'],
-    healthEffects: 'Irritates nose, throat, and airways, causing coughing and wheezing. Can worsen asthma and chronic bronchitis.'
-  },
-  pm2_5: {
-    name: 'PM2.5',
-    fullName: 'Fine Particulate Matter',
-    unit: 'μg/m³',
-    thresholds: { good: 10, fair: 25, moderate: 50, poor: 75 },
-    description: 'Tiny particles less than 2.5 micrometers in diameter',
-    sources: ['Combustion engines', 'Power plants', 'Construction', 'Agricultural burning', 'Forest fires'],
-    healthEffects: 'Can penetrate deep into lungs and bloodstream, leading to heart and lung disease, reduced lung function, and premature death.'
-  },
-  pm10: {
-    name: 'PM10',
-    fullName: 'Coarse Particulate Matter',
-    unit: 'μg/m³',
-    thresholds: { good: 20, fair: 50, moderate: 100, poor: 200 },
-    description: 'Particles less than 10 micrometers in diameter',
-    sources: ['Dust from construction', 'Road dust', 'Agricultural operations', 'Industrial processes'],
-    healthEffects: 'Can irritate eyes, nose, and throat, worsen asthma and bronchitis.'
-  },
-  nh3: {
-    name: 'NH₃',
-    fullName: 'Ammonia',
-    unit: 'μg/m³', 
-    // Note: OpenWeather does not provide specific thresholds for NH3
-    thresholds: { good: 20, fair: 50, moderate: 100, poor: 200 },
-    description: 'Colorless gas with a distinct pungent smell',
-    sources: ['Agricultural activities', 'Livestock waste', 'Fertilizer application'],
-    healthEffects: 'Irritates respiratory system, eyes, and skin. Can form secondary particulate matter.'
-  }
-};
-
-// Determine AQI category based on level (1-5)
+// AQI Categories based on the Air Quality Index
 export const getAQICategory = (aqi: number): string => {
   switch (aqi) {
-    case 1: return 'Good';
-    case 2: return 'Fair';
-    case 3: return 'Moderate';
-    case 4: return 'Poor';
-    case 5: return 'Very Poor';
-    default: return 'Unknown';
+    case 1:
+      return "Good";
+    case 2:
+      return "Fair";
+    case 3:
+      return "Moderate";
+    case 4:
+      return "Poor";
+    case 5:
+      return "Very Poor";
+    default:
+      return "Unknown";
   }
 };
 
-// Get class for AQI level
+// Color classes for AQI based on Tailwind CSS
 export const getAQIColorClass = (aqi: number): string => {
   switch (aqi) {
-    case 1: return 'bg-aqi-good text-gray-900';
-    case 2: return 'bg-aqi-fair text-gray-900';
-    case 3: return 'bg-aqi-moderate text-gray-900';
-    case 4: return 'bg-aqi-poor text-white';
-    case 5: return 'bg-aqi-verypoor text-white';
-    default: return 'bg-gray-300';
-  }
-};
-
-// Analyzes pollutant levels to determine potential sources and health impacts
-export const analyzePollutants = (components: Record<string, number>): {
-  significantPollutants: string[];
-  potentialSources: string[];
-  healthImplications: string;
-} => {
-  let significantPollutants: string[] = [];
-  let potentialSources = new Set<string>();
-  let highestAQI = 1;
-  
-  // Determine significant pollutants (those above "fair" thresholds)
-  for (const [key, value] of Object.entries(components)) {
-    // Skip keys that aren't in our pollutant info
-    if (!pollutantInfo[key]) continue;
-    
-    const info = pollutantInfo[key];
-    let pollutantAQI = 1;
-    
-    // Determine AQI level for this pollutant
-    if (value > info.thresholds.poor) {
-      pollutantAQI = 5;
-    } else if (value > info.thresholds.moderate) {
-      pollutantAQI = 4;
-    } else if (value > info.thresholds.fair) {
-      pollutantAQI = 3;
-    } else if (value > info.thresholds.good) {
-      pollutantAQI = 2;
-    }
-    
-    if (pollutantAQI > 2) {
-      significantPollutants.push(info.name);
-      
-      // Add sources for this pollutant
-      info.sources.forEach(source => potentialSources.add(source));
-      
-      // Track highest AQI
-      if (pollutantAQI > highestAQI) {
-        highestAQI = pollutantAQI;
-      }
-    }
-  }
-  
-  // Generate health implications based on highest AQI
-  let healthImplications = '';
-  switch (highestAQI) {
     case 1:
-      healthImplications = 'Air quality is satisfactory, poses little or no health risk.';
-      break;
+      return "bg-aqi-good text-green-900";
     case 2:
-      healthImplications = 'Air quality is acceptable. Some pollutants may be a concern for very sensitive individuals.';
-      break;
+      return "bg-aqi-fair text-yellow-900";
     case 3:
-      healthImplications = 'Members of sensitive groups may experience health effects. General public is less likely to be affected.';
-      break;
+      return "bg-aqi-moderate text-orange-900";
     case 4:
-      healthImplications = 'Everyone may begin to experience health effects. Members of sensitive groups may experience more serious effects.';
-      break;
+      return "bg-aqi-poor text-red-900";
     case 5:
-      healthImplications = 'Health alert: Everyone may experience more serious health effects.';
+      return "bg-aqi-verypoor text-purple-900";
+    default:
+      return "bg-gray-300 text-gray-800";
+  }
+};
+
+// Information about pollutants
+export const pollutantInfo: Record<string, {
+  name: string;
+  fullName: string;
+  description: string;
+  unit: string;
+  thresholds: {
+    good: number;
+    fair: number;
+    moderate: number;
+    poor: number;
+  };
+  healthEffects: string;
+  sources: string[];
+}> = {
+  co: {
+    name: "CO",
+    fullName: "Carbon Monoxide",
+    description: "Carbon monoxide is a colorless, odorless gas produced by incomplete combustion of carbon-containing fuels.",
+    unit: "μg/m³",
+    thresholds: {
+      good: 4400,
+      fair: 9400,
+      moderate: 12400,
+      poor: 15400
+    },
+    healthEffects: "Carbon monoxide reduces the blood's ability to carry oxygen. Low levels can cause dizziness, headaches, and fatigue. High levels can be fatal.",
+    sources: [
+      "Vehicle exhaust",
+      "Coal and wood burning",
+      "Gas furnaces and stoves",
+      "Industrial processes"
+    ]
+  },
+  no2: {
+    name: "NO₂",
+    fullName: "Nitrogen Dioxide",
+    description: "Nitrogen dioxide is a reddish-brown gas with a sharp odor. It's part of a group of pollutants called nitrogen oxides (NOx).",
+    unit: "μg/m³",
+    thresholds: {
+      good: 40,
+      fair: 70,
+      moderate: 150,
+      poor: 200
+    },
+    healthEffects: "NO₂ can irritate the respiratory system, worsen asthma, and contribute to the development of respiratory infections. Long-term exposure may lead to respiratory diseases.",
+    sources: [
+      "Vehicle emissions",
+      "Power plants",
+      "Industrial processes",
+      "Gas stoves and heaters"
+    ]
+  },
+  o3: {
+    name: "O₃",
+    fullName: "Ozone",
+    description: "Ozone at ground level is a harmful air pollutant formed when nitrogen oxides and volatile organic compounds react in sunlight.",
+    unit: "μg/m³",
+    thresholds: {
+      good: 60,
+      fair: 100,
+      moderate: 140,
+      poor: 180
+    },
+    healthEffects: "Ozone can cause coughing, throat irritation, chest pain, and reduced lung function. It can worsen asthma, bronchitis, and emphysema.",
+    sources: [
+      "Vehicle exhaust",
+      "Industrial emissions",
+      "Chemical solvents",
+      "Created by sunlight reacting with other pollutants"
+    ]
+  },
+  so2: {
+    name: "SO₂",
+    fullName: "Sulfur Dioxide",
+    description: "Sulfur dioxide is a colorless gas with a sharp odor. It's produced by burning fossil fuels containing sulfur.",
+    unit: "μg/m³",
+    thresholds: {
+      good: 20,
+      fair: 80,
+      moderate: 250,
+      poor: 350
+    },
+    healthEffects: "SO₂ irritates the respiratory system, causing coughing, mucus secretion, and aggravation of asthma. Long-term exposure may contribute to respiratory illnesses.",
+    sources: [
+      "Coal and oil burning power plants",
+      "Industrial processes",
+      "Smelters",
+      "Diesel vehicles"
+    ]
+  },
+  pm2_5: {
+    name: "PM2.5",
+    fullName: "Fine Particulate Matter",
+    description: "PM2.5 refers to tiny particles or droplets in the air that are 2.5 micrometers or less in width.",
+    unit: "μg/m³",
+    thresholds: {
+      good: 10,
+      fair: 25,
+      moderate: 50,
+      poor: 75
+    },
+    healthEffects: "PM2.5 can penetrate deep into the lungs and even enter the bloodstream, causing respiratory and cardiovascular problems, including irregular heartbeat and premature death in people with heart or lung disease.",
+    sources: [
+      "Vehicle exhaust",
+      "Power plants",
+      "Wood burning",
+      "Industrial processes",
+      "Wildfires"
+    ]
+  },
+  pm10: {
+    name: "PM10",
+    fullName: "Coarse Particulate Matter",
+    description: "PM10 refers to inhalable particles with diameters generally 10 micrometers and smaller.",
+    unit: "μg/m³",
+    thresholds: {
+      good: 20,
+      fair: 50,
+      moderate: 100,
+      poor: 200
+    },
+    healthEffects: "PM10 can irritate the eyes, nose, and throat, and can cause respiratory issues, especially for people with existing conditions like asthma.",
+    sources: [
+      "Dust from roads and construction",
+      "Agricultural operations",
+      "Industrial processes",
+      "Pollen and mold spores"
+    ]
+  },
+  nh3: {
+    name: "NH₃",
+    fullName: "Ammonia",
+    description: "Ammonia is a colorless gas with a pungent odor. It's an important source of nitrogen for plants and agriculture.",
+    unit: "μg/m³",
+    thresholds: {
+      good: 100,
+      fair: 200,
+      moderate: 400,
+      poor: 800
+    },
+    healthEffects: "Ammonia can irritate the respiratory tract, eyes, and skin. High concentrations can cause coughing and breathing difficulty.",
+    sources: [
+      "Agricultural activities",
+      "Livestock waste",
+      "Fertilizer application",
+      "Industrial processes"
+    ]
+  }
+};
+
+// Helper to analyze pollutant levels based on thresholds
+export const analyzePollutants = (components: Record<string, number>) => {
+  return Object.entries(components).map(([key, value]) => {
+    const info = pollutantInfo[key];
+    if (!info) return null;
+    
+    let status: string;
+    if (value >= info.thresholds.poor) {
+      status = "Very High";
+    } else if (value >= info.thresholds.moderate) {
+      status = "High";
+    } else if (value >= info.thresholds.fair) {
+      status = "Moderate";
+    } else if (value >= info.thresholds.good) {
+      status = "Elevated";
+    } else {
+      status = "Low";
+    }
+    
+    return {
+      key,
+      name: info.name,
+      fullName: info.fullName,
+      value,
+      unit: info.unit,
+      status
+    };
+  }).filter(Boolean);
+};
+
+// Function to fetch air quality data
+export const fetchAirQualityData = async (
+  lat: number,
+  lon: number,
+  type: "current" | "forecast" | "historical" = "current",
+  historyStart?: number,
+  historyEnd?: number
+): Promise<AirPollutionResponse> => {
+  const baseUrl = "https://api.openweathermap.org/data/2.5/air_pollution";
+  
+  // API key should ideally be stored in environment variables
+  const apiKey = "11ea526c4df54f749a4175954232011"; // Replace with your actual API key
+  
+  let url: string;
+  
+  switch (type) {
+    case "forecast":
+      url = `${baseUrl}/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}`;
+      break;
+    case "historical":
+      if (!historyStart || !historyEnd) {
+        throw new Error("Historical data requires start and end timestamps");
+      }
+      url = `${baseUrl}/history?lat=${lat}&lon=${lon}&start=${historyStart}&end=${historyEnd}&appid=${apiKey}`;
+      break;
+    case "current":
+    default:
+      url = `${baseUrl}?lat=${lat}&lon=${lon}&appid=${apiKey}`;
       break;
   }
   
-  return {
-    significantPollutants,
-    potentialSources: Array.from(potentialSources),
-    healthImplications
-  };
+  const response = await fetch(url);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch air quality data: ${response.statusText}`);
+  }
+  
+  return await response.json();
 };
 
-// Format date from unix timestamp
-export const formatDate = (unixTime: number): string => {
-  const date = new Date(unixTime * 1000);
-  return date.toLocaleString();
+export default {
+  fetchAirQualityData,
+  getAQICategory,
+  getAQIColorClass,
+  analyzePollutants,
+  pollutantInfo
 };
