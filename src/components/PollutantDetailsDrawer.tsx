@@ -1,5 +1,11 @@
 
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { pollutantInfo } from "@/services/airQualityService";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -68,19 +74,19 @@ const PollutantDetailsDrawer = ({ isOpen, onClose, pollutant, value }: Pollutant
   };
   
   return (
-    <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>
+    <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>
             {info.name} - {info.fullName}
-          </SheetTitle>
-          <SheetDescription>
+          </DrawerTitle>
+          <DrawerDescription>
             Detailed information about this pollutant
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
         
-        <ScrollArea className="h-[calc(100vh-120px)] mt-6">
-          <div className="space-y-6 pr-4">
+        <ScrollArea className="h-[calc(100vh-300px)] px-4">
+          <div className="space-y-6 pb-8">
             {value !== undefined && (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -135,7 +141,7 @@ const PollutantDetailsDrawer = ({ isOpen, onClose, pollutant, value }: Pollutant
                     </div>
                     <div className="grid grid-cols-2 text-sm">
                       <span className="text-muted-foreground">Very Poor:</span>
-                      <span>{{'>'}{info.thresholds.poor}} {info.unit}</span>
+                      <span>&gt;{info.thresholds.poor} {info.unit}</span>
                     </div>
                   </div>
                 </div>
@@ -160,8 +166,8 @@ const PollutantDetailsDrawer = ({ isOpen, onClose, pollutant, value }: Pollutant
             </Tabs>
           </div>
         </ScrollArea>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 };
 
