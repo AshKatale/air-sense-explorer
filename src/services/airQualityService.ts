@@ -1,5 +1,59 @@
 
-import { Coordinates, AirQualityData, AirPollutionResponse } from "@/types/airQuality";
+import { Coordinates, AirQualityData, AirPollutionResponse, AirPollutionComponents } from "@/types/airQuality";
+
+const API_KEY_STORAGE_KEY = "openweather_api_key";
+const DEFAULT_API_KEY = "11ea526c4df54f749a4175954232011"; // Fallback API key
+
+// Function to get the API key from localStorage or use default
+export const getApiKey = (): string => {
+  return localStorage.getItem(API_KEY_STORAGE_KEY) || DEFAULT_API_KEY;
+};
+
+// Function to save API key to localStorage and validate it
+export const setApiKey = async (key: string): Promise<boolean> => {
+  try {
+    // Test the API key with a simple request
+    const testResponse = await fetch(
+      `https://api.openweathermap.org/data/2.5/air_pollution?lat=51.505&lon=-0.09&appid=${key}`
+    );
+    
+    if (testResponse.ok) {
+      localStorage.setItem(API_KEY_STORAGE_KEY, key);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Error validating API key:", error);
+    return false;
+  }
+};
+
+// Function to validate the existing API key
+export const isValidApiKey = async (): Promise<boolean> => {
+  const key = getApiKey();
+  if (!key) return false;
+  
+  try {
+    const testResponse = await fetch(
+      `https://api.openweathermap.org/data/2.5/air_pollution?lat=51.505&lon=-0.09&appid=${key}`
+    );
+    return testResponse.ok;
+  } catch (error) {
+    console.error("Error validating API key:", error);
+    return false;
+  }
+};
+
+// Format date for charts and display
+export const formatDate = (dt: number): string => {
+  const date = new Date(dt * 1000);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+  }).format(date);
+};
 
 // AQI Categories based on the Air Quality Index
 export const getAQICategory = (aqi: number): string => {
@@ -189,9 +243,9 @@ export const pollutantInfo: Record<string, {
 };
 
 // Helper to analyze pollutant levels based on thresholds
-export const analyzePollutants = (components: Record<string, number>) => {
-  return Object.entries(components).map(([key, value]) => {
-    const info = pollutantInfo[key];
+export const analyzePollutants = (components: AirPollutionComponents) => {
+  const results = Object.entries(components).map(([key, value]) => {
+    const info = pollutantInfo[key as keyof typeof pollutantInfo];
     if (!info) return null;
     
     let status: string;
@@ -216,6 +270,40 @@ export const analyzePollutants = (components: Record<string, number>) => {
       status
     };
   }).filter(Boolean);
+
+  // Add derived analysis properties
+  const analysisResults = results as any[];
+  
+  // Identify significant pollutants (those with High or Very High levels)
+  analysisResults.significantPollutants = analysisResults
+    .filter(p => p.status === "High" || p.status === "Very High")
+    .map(p => p.name);
+
+  // Add potential sources based on significant pollutants
+  const allSources = new Set<string>();
+  analysisResults
+    .filter(p => p.status === "High" || p.status === "Very High")
+    .forEach(p => {
+      const info = pollutantInfo[p.key];
+      if (info && info.sources) {
+        info.sources.forEach(source => allSources.add(source));
+      }
+    });
+  analysisResults.potentialSources = Array.from(allSources);
+
+  // Add health implications
+  const healthEffects = new Set<string>();
+  analysisResults
+    .filter(p => p.status !== "Low")
+    .forEach(p => {
+      const info = pollutantInfo[p.key];
+      if (info && info.healthEffects) {
+        healthEffects.add(info.healthEffects);
+      }
+    });
+  analysisResults.healthImplications = Array.from(healthEffects);
+
+  return analysisResults;
 };
 
 // Function to fetch air quality data
@@ -228,8 +316,8 @@ export const fetchAirQualityData = async (
 ): Promise<AirPollutionResponse> => {
   const baseUrl = "https://api.openweathermap.org/data/2.5/air_pollution";
   
-  // API key should ideally be stored in environment variables
-  const apiKey = "11ea526c4df54f749a4175954232011"; // Replace with your actual API key
+  // Get API key from localStorage or use default
+  const apiKey = getApiKey();
   
   let url: string;
   
@@ -263,5 +351,9 @@ export default {
   getAQICategory,
   getAQIColorClass,
   analyzePollutants,
-  pollutantInfo
+  pollutantInfo,
+  getApiKey,
+  setApiKey,
+  isValidApiKey,
+  formatDate
 };
