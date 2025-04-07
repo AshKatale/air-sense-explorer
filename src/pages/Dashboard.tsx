@@ -1,8 +1,7 @@
-
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Coordinates, AirQualityData, AirPollutionResponse } from "@/types/airQuality";
+import { Coordinates, AirQualityData } from "@/types/airQuality";
 import { fetchAirQualityData, pollutantInfo } from "@/services/airQualityService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AirQualityMap from "@/components/AirQualityMap";
@@ -14,6 +13,7 @@ import CoordinateInput from "@/components/CoordinateInput";
 import AqiLegend from "@/components/AqiLegend";
 import PollutantDetailsDrawer from "@/components/PollutantDetailsDrawer";
 import ImageAnalysis from "@/components/ImageAnalysis";
+import ApiKeyInput from "@/components/ApiKeyInput";
 
 const Dashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,6 +26,7 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedPollutant, setSelectedPollutant] = useState<string | null>(null);
   const [selectedPollutantValue, setSelectedPollutantValue] = useState<number | undefined>(undefined);
+  const [hasValidApiKey, setHasValidApiKey] = useState<boolean>(false);
 
   // Update URL params when coordinates change
   useEffect(() => {
@@ -52,6 +53,8 @@ const Dashboard = () => {
 
   // Fetch current and forecast data when coordinates change
   useEffect(() => {
+    if (!hasValidApiKey) return;
+    
     const fetchData = async () => {
       setIsLoading(true);
       
@@ -81,7 +84,7 @@ const Dashboard = () => {
     };
     
     fetchData();
-  }, [coordinates]);
+  }, [coordinates, hasValidApiKey]);
 
   const handleLocationSelect = (newCoords: Coordinates) => {
     setCoordinates(newCoords);
@@ -95,6 +98,20 @@ const Dashboard = () => {
   const closePollutantDetails = () => {
     setSelectedPollutant(null);
   };
+
+  // If no valid API key, show the API key input component
+  if (!hasValidApiKey) {
+    return (
+      <div className="container max-w-7xl mx-auto px-4 py-16 flex flex-col items-center">
+        <h1 className="text-3xl font-bold mb-8 text-center">Urban Air Pollution Explorer</h1>
+        <p className="text-center mb-8 max-w-2xl">
+          Monitor and analyze air quality data using OpenWeather's Air Pollution API. 
+          To begin, please enter your OpenWeather API key.
+        </p>
+        <ApiKeyInput onValidKey={() => setHasValidApiKey(true)} />
+      </div>
+    );
+  }
 
   return (
     <div className="container max-w-7xl mx-auto px-4 py-8">

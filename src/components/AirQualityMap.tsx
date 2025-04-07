@@ -1,6 +1,5 @@
-
 import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl, CircleMarker } from 'react-leaflet';
 import { toast } from "sonner";
 import 'leaflet/dist/leaflet.css';
 import { fetchAirQualityData, getAQICategory, getAQIColorClass, analyzePollutants } from '@/services/airQualityService';
@@ -13,46 +12,43 @@ import { Search } from 'lucide-react';
 import L from 'leaflet';
 
 // Fix for Leaflet marker icons
-// This redefines the icon paths for Leaflet markers
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
-let DefaultIcon = L.icon({
-  iconUrl: icon,
-  shadowUrl: iconShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
+// This ensures Leaflet can find the marker images
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
-L.Marker.prototype.options.icon = DefaultIcon;
-
-// Custom marker for AQI
-const createAQIMarkerIcon = (aqi: number) => {
-  return L.divIcon({
-    className: `aqi-marker aqi-marker-${aqi}`,
-    html: `<div class="flex items-center justify-center w-[30px] h-[30px] rounded-full bg-white border-2 border-${getAQIColorClass(aqi)} text-sm font-bold">${aqi}</div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-    popupAnchor: [0, -15]
-  });
+// Custom marker for AQI using CircleMarker for better compatibility
+const getAQIColor = (aqi) => {
+  switch (aqi) {
+    case 1: return '#009966'; // Good
+    case 2: return '#FFDE33'; // Fair
+    case 3: return '#FF9933'; // Moderate
+    case 4: return '#CC0033'; // Poor
+    case 5: return '#660099'; // Very Poor
+    default: return '#AAAAAA'; // Unknown
+  }
 };
 
 // Component to set map view when coordinates change
-const SetViewOnCoordinatesChange = ({ coordinates }: { coordinates: Coordinates }) => {
+const SetViewOnCoordinatesChange = ({ coordinates }) => {
   const map = useMap();
   useEffect(() => {
-    map.setView([coordinates.lat, coordinates.lon], map.getZoom());
+    if (coordinates && coordinates.lat && coordinates.lon) {
+      map.setView([coordinates.lat, coordinates.lon], map.getZoom());
+    }
   }, [coordinates, map]);
   return null;
 };
 
 // Click handler component
-const MapClickHandler = ({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) => {
+const MapClickHandler = ({ onLocationSelect }) => {
   const map = useMap();
   
   useEffect(() => {
-    const handleClick = (e: L.LeafletMouseEvent) => {
+    const handleClick = (e) => {
       const { lat, lng } = e.latlng;
       onLocationSelect(lat, lng);
     };
@@ -67,17 +63,13 @@ const MapClickHandler = ({ onLocationSelect }: { onLocationSelect: (lat: number,
   return null;
 };
 
-interface AirQualityMapProps {
-  onLocationSelect: (coordinates: Coordinates) => void;
-}
-
-const AirQualityMap = ({ onLocationSelect }: AirQualityMapProps) => {
-  const [currentLocation, setCurrentLocation] = useState<Coordinates>({ lat: 51.505, lon: -0.09 });
-  const [currentData, setCurrentData] = useState<AirQualityData | null>(null);
+const AirQualityMap = ({ onLocationSelect }) => {
+  const [currentLocation, setCurrentLocation] = useState({ lat: 51.505, lon: -0.09 });
+  const [currentData, setCurrentData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [mapInitialized, setMapInitialized] = useState(false);
-  const mapRef = useRef<L.Map | null>(null);
+  const mapRef = useRef(null);
 
   useEffect(() => {
     // Try to get the user's current location
@@ -88,12 +80,12 @@ const AirQualityMap = ({ onLocationSelect }: AirQualityMapProps) => {
           lon: position.coords.longitude
         };
         setCurrentLocation(newCoords);
-        onLocationSelect(newCoords);
+        if (onLocationSelect) onLocationSelect(newCoords);
         setMapInitialized(true);
       }, (error) => {
         console.log("Geolocation error:", error);
         // Default to London if geolocation fails
-        onLocationSelect(currentLocation);
+        if (onLocationSelect) onLocationSelect(currentLocation);
         setMapInitialized(true);
       });
     } else {
@@ -103,30 +95,46 @@ const AirQualityMap = ({ onLocationSelect }: AirQualityMapProps) => {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!currentLocation.lat || !currentLocation.lon) return;
+      
       setIsLoading(true);
       try {
-        const data = await fetchAirQualityData(currentLocation.lat, currentLocation.lon);
+        // You can use OpenWeatherMap's free air quality API
+        // Replace with your API key
+        const apiKey = 'fbd40a016addc88a2fb8ad950326cee9'
+        const response = await fetch(
+          `https://api.openweathermap.org/data/2.5/air_pollution?lat=${currentLocation.lat}&lon=${currentLocation.lon}&appid=${apiKey}`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
         if (data && data.list && data.list.length > 0) {
           setCurrentData(data.list[0]);
         }
       } catch (error) {
         console.error("Error fetching air quality data:", error);
+        toast.error("Could not fetch air quality data");
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
-  }, [currentLocation]);
+    if (mapInitialized) {
+      fetchData();
+    }
+  }, [currentLocation, mapInitialized]);
 
-  const handleMapClick = (lat: number, lng: number) => {
+  const handleMapClick = (lat, lng) => {
     const newCoords = { lat, lon: lng };
     setCurrentLocation(newCoords);
-    onLocationSelect(newCoords);
+    if (onLocationSelect) onLocationSelect(newCoords);
     toast.info(`Selected location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
   };
 
-  const handlePlaceSearch = async (e: React.FormEvent) => {
+  const handlePlaceSearch = async (e) => {
     e.preventDefault();
     if (!searchQuery.trim()) {
       toast.error("Please enter a place name");
@@ -136,14 +144,21 @@ const AirQualityMap = ({ onLocationSelect }: AirQualityMapProps) => {
     setIsLoading(true);
     try {
       // Using Nominatim API for geocoding (OpenStreetMap)
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Geocoding error: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data && data.length > 0) {
         const { lat, lon } = data[0];
         const newCoords = { lat: parseFloat(lat), lon: parseFloat(lon) };
         setCurrentLocation(newCoords);
-        onLocationSelect(newCoords);
+        if (onLocationSelect) onLocationSelect(newCoords);
         toast.success(`Location found: ${data[0].display_name}`);
       } else {
         toast.error("Location not found. Please try a different search term.");
@@ -178,12 +193,12 @@ const AirQualityMap = ({ onLocationSelect }: AirQualityMapProps) => {
           </Button>
         </form>
       </CardHeader>
-      <CardContent className="p-0 relative">
-        {mapInitialized && (
+      <CardContent className="p-0 relative h-[calc(100%-100px)]">
+        {mapInitialized ? (
           <MapContainer
             center={[currentLocation.lat, currentLocation.lon]}
             zoom={10}
-            style={{ height: "calc(100% - 80px)", width: "100%", zIndex: 0 }}
+            style={{ height: "100%", width: "100%" }}
             zoomControl={false}
             whenCreated={(map) => {
               mapRef.current = map;
@@ -198,16 +213,23 @@ const AirQualityMap = ({ onLocationSelect }: AirQualityMapProps) => {
             <MapClickHandler onLocationSelect={handleMapClick} />
             
             {currentData && (
-              <Marker 
-                position={[currentLocation.lat, currentLocation.lon]} 
-                icon={createAQIMarkerIcon(currentData.main.aqi)}
+              <CircleMarker 
+                center={[currentLocation.lat, currentLocation.lon]}
+                pathOptions={{
+                  fillColor: getAQIColor(currentData.main.aqi),
+                  fillOpacity: 0.7,
+                  color: 'white',
+                  weight: 2
+                }}
+                radius={20}
               >
                 <Popup>
                   <div className="p-2">
                     <div className="font-bold mb-1">
                       Air Quality: {getAQICategory(currentData.main.aqi)}
                     </div>
-                    <div className={`inline-block px-2 py-1 rounded-full text-xs font-bold ${getAQIColorClass(currentData.main.aqi)}`}>
+                    <div className="inline-block px-2 py-1 rounded-full text-xs font-bold" 
+                         style={{ backgroundColor: getAQIColor(currentData.main.aqi), color: 'white' }}>
                       AQI Level: {currentData.main.aqi}
                     </div>
                     <div className="mt-2 text-xs">
@@ -231,21 +253,20 @@ const AirQualityMap = ({ onLocationSelect }: AirQualityMapProps) => {
                       variant="outline" 
                       className="w-full mt-2 text-xs" 
                       onClick={() => {
-                        onLocationSelect(currentLocation);
+                        if (onLocationSelect) onLocationSelect(currentLocation);
                       }}
                     >
                       View Detailed Analysis
                     </Button>
                   </div>
                 </Popup>
-              </Marker>
+              </CircleMarker>
             )}
           </MapContainer>
-        )}
-        {!mapInitialized && (
+        ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/10">
             <div className="text-center">
-              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent align-[-0.125em]"></div>
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
               <p className="mt-2 text-sm text-muted-foreground">Loading map...</p>
             </div>
           </div>
